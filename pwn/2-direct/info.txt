@@ -1,0 +1,3 @@
+Esse driver de kernel lhe dará um shell se você encontrar a agulha no palheiro Use o vi para escrever o exploit. A flag esta em /dev/sda, boa sorte.
+
+socat FILE:`tty`,raw,echo=0 TCP:challenges.ctfh2hc2023.win:9092

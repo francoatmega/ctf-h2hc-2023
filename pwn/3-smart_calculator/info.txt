@@ -1,0 +1,5 @@
+Essa calculadora esta um pouco quebrada, mas será que voce consegue obter a flag?
+
+Dica: Info Quando enviar o exploit para o servidor, tente enviar os bytes com pequenos intervalos de tempo, afinal trata-se de um teclado...
+
+nc challenges.ctfh2hc2023.win:9094

@@ -1,0 +1,68 @@
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <title>Templater</title>
+
+    <!-- UIkit CSS -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/uikit@3.16.26/dist/css/uikit.min.css"
+    />
+
+    <!-- UIkit JS -->
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.26/dist/js/uikit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.26/dist/js/uikit-icons.min.js"></script>
+
+    <script src="purify.min.js"></script>
+    <script src="index.js" defer></script>
+  </head>
+
+  <body>
+    <div class="uk-section uk-section-muted">
+      <div class="uk-container">
+        <h1 class="uk-heading-medium uk-heading-divider uk-text-center">
+          Templater
+        </h1>
+      </div>
+
+      <div class="uk-container uk-container-small">
+        <div class="uk-form-stacked">
+          <label class="uk-form-label uk-text-large">Variables</label>
+          <div class="uk-form-horizontal">
+            <label class="uk-form-label">first_name</label>
+            <input id="first_name" class="uk-input" type="text" value="John" />
+            <label class="uk-form-label">last_name</label>
+            <input id="last_name" class="uk-input" type="text" value="Smith" />
+            <label class="uk-form-label">birthday</label>
+            <input
+              id="birthday"
+              class="uk-input"
+              type="text"
+              value="01/01/1970"
+            />
+          </div>
+          <label class="uk-form-label uk-text-large">Template</label>
+          <textarea id="template" class="uk-textarea">
+Hello! {{first_name}} {{last_name}} was born in {{birthday}}.
+You can also use default values: {{does_not_exist | "default value"}}.
+          </textarea>
+          <button id="submit" class="uk-button uk-button-primary">
+            Submit
+          </button>
+          <button id="generate" class="uk-button uk-button-primary">
+            Generate link to this template
+          </button>
+		  <pre id="link">
+		  </pre>
+        </div>
+      </div>
+
+      <div class="uk-container uk-container-small uk-padding">
+        <label class="uk-form-label uk-text-large">Rendered version</label>
+        <div id="rendered"></div>
+      </div>
+    </div>
+  </body>
+</html>

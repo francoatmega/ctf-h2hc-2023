@@ -1,0 +1,3 @@
+Parece que essa VM está com o SMAP e SMAP desabilitados... Use o vi para escrever o exploit. A flag esta em /dev/sda
+
+socat FILE:`tty`,raw,echo=0 TCP:challenges.ctfh2hc2023.win:9093

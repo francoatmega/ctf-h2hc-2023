@@ -1,0 +1,489 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes App</title>
+    <style>
+        /* Basic styling */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+        }
+
+        .note {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Notes App</h1>
+
+    <!-- User selection -->
+    <label for="username">User:</label>
+    <input type="text" id="username" placeholder="Enter your username">
+    <br><br>
+
+    <!-- Create Note Form -->
+    <h2>Create New Note</h2>
+    <form id="createNoteForm">
+        <label for="title">Title:</label>
+        <input type="text" id="title" name="title">
+        <br><br>
+        <label for="content">Content:</label>
+        <textarea id="content" name="content"></textarea>
+        <br><br>
+        <input type="submit" value="Create Note">
+    </form>
+
+    <!-- List Notes -->
+    <h2>Your Notes</h2>
+	<button onclick="loadNotes()">Refresh</button>
+    <div id="notesList"></div>
+
+    <!-- Integrity Check -->
+    <h2>Integrity Check</h2>
+    <button onclick="checkIntegrity()">Run Integrity Check</button>
+    <div id="integrityStatus"></div>
+
+    <script>
+        document.getElementById("createNoteForm").addEventListener("submit", function (event) {
+            event.preventDefault();
+
+            const title = document.getElementById("title").value;
+            const content = document.getElementById("content").value;
+            const user = document.getElementById("username").value;
+
+            fetch('/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User': user
+                },
+                body: JSON.stringify({ title: title, content: content, ID: Math.random().toString(36).substring(7) })
+            }).then(response => {
+                if (response.ok) {
+                    loadNotes();
+                } else {
+                    console.error('Failed to create note');
+                }
+            });
+        });
+
+        function loadNotes() {
+            const user = document.getElementById("username").value;
+
+            fetch('/list', {
+                headers: {
+                    'User': user
+                }
+            }).then(response => response.json()).then(notes => {
+                const notesList = document.getElementById("notesList");
+                notesList.innerHTML = '';
+
+                notes.forEach(note => {
+                    const noteDiv = document.createElement('div');
+                    noteDiv.className = 'note';
+
+                    noteDiv.innerHTML = `
+                        <strong>${note.title}</strong>
+                        <button onclick="editNote('${note.id}')">Edit</button>
+                        <button onclick="deleteNote('${note.id}')">Delete</button>
+                        <button onclick="readNote('${note.id}')">Read</button>
+                    `;
+
+                    notesList.appendChild(noteDiv);
+                });
+            });
+        }
+
+        function editNote(id) {
+            console.log('Edit:', id);
+        }
+
+        function deleteNote(id) {
+            const user = document.getElementById("username").value;
+
+            fetch(`/delete?id=${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'User': user
+                }
+            }).then(response => {
+                if (response.ok) {
+                    loadNotes();
+                } else {
+                    console.error('Failed to delete note');
+                }
+            });
+        }
+
+        function readNote(id) {
+            console.log('Read:', id);
+        }
+
+        function checkIntegrity() {
+            const user = document.getElementById("username").value;
+
+            fetch('/integrity', {
+                headers: {
+                    'User': user
+                }
+            }).then(response => {
+                const integrityStatus = document.getElementById("integrityStatus");
+                if (response.ok) {
+                    integrityStatus.textContent = 'All files are well-formed';
+                    integrityStatus.style.color = 'green';
+                } else {
+                    response.text().then(text => {
+                        integrityStatus.textContent = text;
+                        integrityStatus.style.color = 'red';
+                    });
+                }
+            });
+        }
+
+        loadNotes();
+    </script>
+</body>
+
+</html>
+
+<!--package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"strings"
+	"net/http"
+	"os"
+	"regexp"
+	"path/filepath"
+	"sync"
+)
+
+const baseDir = "notes"
+var re_user = regexp.MustCompile("^[a-zA-Z0-9]*$")
+
+
+type Note struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}
+
+var mu = &sync.Mutex{}
+
+func getNotePath(user, noteID string) string {
+	return filepath.Join(baseDir, user, noteID+".json")
+}
+
+
+func containsAdmin(s string) bool {
+	return strings.Contains(strings.ToLower(s), "admin") || strings.Contains(strings.ToLower(s), "%") || strings.Contains(strings.ToLower(s), "\\") || strings.Contains(strings.ToLower(s), "&")
+}
+
+func checkRequestForAdmin(r *http.Request) bool {
+	// Check URI
+	if containsAdmin(r.RequestURI) {
+		return true
+	}
+
+	// Check headers
+	for key, values := range r.Header {
+		for _, value := range values {
+			if containsAdmin(key) || containsAdmin(value) {
+				return true
+			}
+		}
+	}
+
+	// Check body
+	bodyBytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		// Handle error (perhaps return false or true depending on your use case)
+		return false
+	}
+	// Ensure the body can be read again for subsequent handlers or middleware
+	r.Body = ioutil.NopCloser(strings.NewReader(string(bodyBytes)))
+
+	if containsAdmin(string(bodyBytes)) {
+		return true
+	}
+
+	return false
+}
+
+func createNoteHandler(w http.ResponseWriter, r *http.Request) {
+	var note Note
+	err := json.NewDecoder(r.Body).Decode(&note)
+	if err != nil {
+		http.Error(w, "Failed to decode note", http.StatusBadRequest)
+		return
+	}
+
+	user := r.Header.Get("User")
+	// check regex for user only alphanumeric
+	if user == "" || len(re_user.FindAllString(user,-1)) == 0 {
+		http.Error(w, "No user header provided", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	userDir := filepath.Join(baseDir, user)
+	if _, err := os.Stat(userDir); os.IsNotExist(err) {
+		os.MkdirAll(userDir, 0755)
+	}
+
+
+	notePath := getNotePath(user, note.ID)
+	noteData, _ := json.Marshal(note)
+	err = ioutil.WriteFile(notePath, noteData, 0644)
+	if err != nil {
+		http.Error(w, "Failed to save note", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func listNotesHandler(w http.ResponseWriter, r *http.Request) {
+	user := r.Header.Get("User")
+	if user == "" || len(re_user.FindAllString(user,-1)) == 0 {
+		http.Error(w, "No user header provided", http.StatusBadRequest)
+		return
+	}
+
+	if checkRequestForAdmin(r) {
+		http.Error(w, "You can't list admin's notes", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	var notes []Note
+	userDir := filepath.Join(baseDir, user)
+	files, _ := ioutil.ReadDir(userDir)
+	for _, file := range files {
+		noteData, err := ioutil.ReadFile(filepath.Join(userDir, file.Name()))
+		if err != nil {
+			continue
+		}
+		var note Note
+		json.Unmarshal(noteData, &note)
+		notes = append(notes, note)
+	}
+
+	json.NewEncoder(w).Encode(notes)
+}
+
+func getNoteHandler(w http.ResponseWriter, r *http.Request) {
+	user := r.Header.Get("User")
+	if user == "" || len(re_user.FindAllString(user,-1)) == 0 {
+		http.Error(w, "No user header provided", http.StatusBadRequest)
+		return
+	}
+
+		if checkRequestForAdmin(r) {
+		http.Error(w, "You can't get admin's notes", http.StatusBadRequest)
+		return
+	}
+
+	noteID := r.URL.Query().Get("id")
+	if noteID == "" {
+		http.Error(w, "No note ID provided", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	notePath := getNotePath(user, noteID)
+	noteData, err := ioutil.ReadFile(notePath)
+	if err != nil {
+		http.Error(w, "Note not found", http.StatusNotFound)
+		return
+	}
+
+	var note Note
+	json.Unmarshal(noteData, &note)
+
+	json.NewEncoder(w).Encode(note)
+}
+
+func editNoteHandler(w http.ResponseWriter, r *http.Request) {
+	var updatedNote Note
+	err := json.NewDecoder(r.Body).Decode(&updatedNote)
+	if err != nil {
+		http.Error(w, "Failed to decode note", http.StatusBadRequest)
+		return
+	}
+
+	user := r.Header.Get("User")
+	if user == "" || len(re_user.FindAllString(user,-1)) == 0{
+		http.Error(w, "No user header provided", http.StatusBadRequest)
+		return
+	}
+
+		if checkRequestForAdmin(r) {
+		http.Error(w, "You can't edit admin's notes", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	notePath := getNotePath(user, updatedNote.ID)
+	_, err = os.Stat(notePath)
+	if os.IsNotExist(err) {
+		http.Error(w, "Note not found", http.StatusNotFound)
+		return
+	}
+
+	noteData, _ := json.Marshal(updatedNote)
+	err = ioutil.WriteFile(notePath, noteData, 0644)
+	if err != nil {
+		http.Error(w, "Failed to update note", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func deleteNoteHandler(w http.ResponseWriter, r *http.Request) {
+	user := r.Header.Get("User")
+	if user == "" || len(re_user.FindAllString(user,-1)) == 0{
+		http.Error(w, "No user header provided", http.StatusBadRequest)
+		return
+	}
+		if checkRequestForAdmin(r) {
+		http.Error(w, "You can't delete admin's notes", http.StatusBadRequest)
+		return
+	}
+
+	noteID := r.URL.Query().Get("id")
+	if noteID == "" {
+		http.Error(w, "No note ID provided", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	notePath := getNotePath(user, noteID)
+	err := os.Remove(notePath)
+	if err != nil {
+		http.Error(w, "Failed to delete note", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+
+func integrityCheckHandler(w http.ResponseWriter, r *http.Request) {
+	tmpDir := "/tmp/notes"
+	os.MkdirAll(tmpDir, 0755) // Ensure the tmp directory exists
+
+	// 1. Copy all files to /tmp/notes directly without subdirs
+	filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			filename := filepath.Base(path) // Get the filename without any directories
+			destPath := filepath.Join(tmpDir, filename)
+			data, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			ioutil.WriteFile(destPath, data, 0644)
+		}
+		return nil
+	})
+
+	// 2. Read those notes from /tmp/notes
+	var badFiles []string
+	filepath.Walk(tmpDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			data, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			// 3. Check if they are well formed
+			var note Note
+			if err := json.Unmarshal(data, &note); err != nil || note.ID == "" || note.Title == "" {
+				badFiles = append(badFiles, path)
+			}
+		}
+		return nil
+	})
+
+	// 4. Deletes the tmp files
+	os.RemoveAll(tmpDir)
+
+	if len(badFiles) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Found malformatted files: " + strings.Join(badFiles, ", ")))
+		return
+	}
+
+	w.Write([]byte("All files are well-formed"))
+}
+
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+		//read index.html
+		index, err := ioutil.ReadFile("index.html")
+		if err != nil {
+			http.Error(w, "Failed to read index.html", http.StatusInternalServerError)
+			return
+		}
+		// read main.go
+		main, err := ioutil.ReadFile("main.go")
+		if err != nil {
+			http.Error(w, "Failed to read main.go", http.StatusInternalServerError)
+			return
+		}
+		// concat index and main
+		comment := []byte("<!--")
+		index = append(index, comment...)
+		index = append(index, main...)
+		w.Write(index)
+}
+
+
+func main() {
+	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
+		os.Mkdir(baseDir, 0755)
+	}
+
+
+	http.HandleFunc("/create", createNoteHandler)
+	http.HandleFunc("/list", listNotesHandler)
+	http.HandleFunc("/get", getNoteHandler)
+	http.HandleFunc("/edit", editNoteHandler)
+	http.HandleFunc("/delete", deleteNoteHandler)
+	http.HandleFunc("/integrity", integrityCheckHandler)
+	http.HandleFunc("/", indexHandler)
+
+	fmt.Println("Server started on :8083")
+	http.ListenAndServe(":8084", nil)
+}
+
